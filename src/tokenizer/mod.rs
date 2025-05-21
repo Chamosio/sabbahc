@@ -6,11 +6,13 @@ use helper::expression::literal::LiteralType;
 
 use std::process::exit;
 
+#[derive(Debug, Clone)]
 pub enum TokenType {
     Keyword(KeywordType),
     Expression(ExpressionType),
 }
 
+#[derive(Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: Option<String>,
@@ -44,7 +46,7 @@ impl Tokenizer {
         }
     }
     fn peek(&self, index: u8) -> Option<char> {
-        let mut peek_index = self.index + index as u64;
+        let peek_index = self.index + index as u64;
         if peek_index >= self.input.len() as u64 {
             return None;
         }
@@ -63,13 +65,13 @@ impl Tokenizer {
     }
     pub fn tokenize(&mut self) -> Vec<StatementAST> {
         let mut statements: Vec<StatementAST> = Vec::new();
+        let mut tokens: StatementAST = StatementAST::new();
+        let mut line: u16 = 1 as u16;
         while self.index < self.input.len() as u64 {
-            let mut tokens: StatementAST = StatementAST::new();
-            let current_char = self.peek(0).unwrap(); 
-            let mut column: u16 = 1 as u16;
+            let current_char = self.peek(0).unwrap();
             if current_char.is_whitespace() {
                 if current_char == '\n' {
-                    column += 1 as u16;
+                    line += 1 as u16;
                 }
                 self.consume(0);
                 continue
@@ -87,7 +89,7 @@ impl Tokenizer {
                         });
                     },
                     _ => {
-                        println!("Compile-time error on line {}: Unexpected text: {}", column, current);
+                        println!("Compile-time error on line {}: Unexpected text: {}", line, current);
                         exit(7);
                     }
                 }
@@ -104,8 +106,10 @@ impl Tokenizer {
             }
             else if current_char == ';' {
                 statements.push(StatementAST {
-                    children: tokens.children
+                    children: tokens.children.clone()
                 });
+
+                self.consume(0);
             }
         }
         statements

@@ -58,11 +58,11 @@ impl CLIInstructions {
         let mut timestamp: bool = false;
         let mut exit_early: Option<EarlyExit> = None;
         let mut force: bool = false;
-        let mut i = 2 /* skip commmand and filename */;
+        let mut i = 1 /* skip commmand */;
         while i < args.len() {
             match args[i].as_str() {
                         "-h" | "--help" => {
-                            print!("{}", HELP);
+                            exit_early = Some(EarlyExit::Help);
                         }
                         "-f" | "--force" => {
                             force = true;
@@ -102,7 +102,15 @@ impl CLIInstructions {
                         "-t" | "--timestamp" => {
                             timestamp = true;
                         }
-                    _ => {println!("Unrecognized flag/option: {}", args[i]);exit(2);}
+                    _ => {
+                        if i == 1 { // First argument is input file
+                            input = args[i].clone();
+                        }
+                        else if args[i].starts_with("-") {
+                            println!("ERROR: Unrecognized flag/option: {}", args[i]);
+                            exit(2);
+                        }
+                    }
             }
             i += 1;
         }
@@ -181,7 +189,7 @@ fn main() {
     let input = std::fs::read_to_string(instructions.input.clone()).expect("Failed to read input file");
     let mut tokenizer = tokenizer::Tokenizer::new(input);
     let tokenized: Vec<tokenizer::StatementAST> = tokenizer.tokenize();
-    let compiled: String = compiler::compile(&tokenized);
+    let compiled: String = compiler::compile(&tokenized, instructions.timestamp, &instructions.input);
 
     match instructions.mode {
         OutputMode::Assembly => {
@@ -189,7 +197,7 @@ fn main() {
             output.write_all(compiled.as_bytes()).unwrap();
         }
         OutputMode::Object => {
-            let mut asm_output = find_empty_temp_filename();
+            let asm_output = find_empty_temp_filename();
             let mut asm_file = std::fs::File::create(asm_output.clone()).unwrap();
             asm_file.write_all(compiled.as_bytes()).unwrap();
             let object_output = instructions.output.clone();
@@ -206,9 +214,10 @@ fn main() {
                 println!("Assembler failed with error: {}", String::from_utf8_lossy(&assembler_output.stderr));
                 exit(11);
             }
+            std::fs::remove_file(asm_output).expect("Failed to remove temporary asm file");
         }
         OutputMode::BinaryExecutable => {
-            let mut asm_output = find_empty_temp_filename();
+            let asm_output = find_empty_temp_filename();
             let mut asm_file = std::fs::File::create(asm_output.clone()).unwrap();
             asm_file.write_all(compiled.as_bytes()).unwrap();
             let object_output = find_empty_temp_filename();
@@ -237,9 +246,8 @@ fn main() {
                 println!("Linker failed with error: {}", String::from_utf8_lossy(&linker_output.stderr));
                 exit(10);
             }
-        }
-        _ => {
-
+            std::fs::remove_file(asm_output).expect("Failed to remove temporary asm file");
+            std::fs::remove_file(object_output).expect("Failed to remove temporary object file");
         }
     }
 }
